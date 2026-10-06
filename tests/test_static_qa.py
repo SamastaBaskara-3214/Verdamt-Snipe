@@ -13,6 +13,7 @@ the original 131 tests caught:
 Also: ScanPolicy budget denial used to be silent (status=0 read as
 "no response" downstream) -> one-shot loud warning, asserted here.
 """
+import asyncio
 import io
 import pathlib
 import unittest
@@ -235,6 +236,84 @@ class TestOriginKeylessStatus(unittest.IsolatedAsyncioTestCase):
             with self.assertRaises(RuntimeError) as ctx:
                 await self.oh._method_fofa("example.com")
         self.assertIn("403", str(ctx.exception))
+
+
+class TestToolProcTracker(unittest.TestCase):
+    """Regression (verdict A:521): tools must be tracked so --max-time can
+    terminate them, and _run_tool must unregister on every exit path."""
+
+    def test_kill_active_procs_terminates(self):
+        import subprocess
+        import time
+        from core.external_tools import _ACTIVE_PROCS, kill_active_procs
+        p = subprocess.Popen(["sleep", "30"])
+        _ACTIVE_PROCS.add(p)
+        try:
+            n = kill_active_procs("unit test")
+            self.assertEqual(n, 1)
+            for _ in range(50):
+                if p.poll() is not None:
+                    break
+                time.sleep(0.05)
+            self.assertIsNotNone(p.poll(), "process was not terminated")
+            self.assertEqual(len(_ACTIVE_PROCS), 0)
+        finally:
+            if p.poll() is None:
+                p.kill()
+
+    def test_run_tool_happy_path_unregisters(self):
+        from unittest.mock import patch
+        from core import external_tools as et
+        with patch.object(et, "_find_tool", return_value="/bin/sh"):
+            rc, out, err = et._run_tool("fake", ["-c", "echo hi"], timeout=5)
+        self.assertEqual(rc, 0)
+        self.assertEqual(out.strip(), "hi")
+        self.assertEqual(len(et._ACTIVE_PROCS), 0)
+
+    def test_run_tool_timeout_salvages_and_unregisters(self):
+        from unittest.mock import patch
+        from core import external_tools as et
+        with patch.object(et, "_find_tool", return_value="/bin/sh"):
+            rc, out, err = et._run_tool("fake", ["-c", "sleep 30"], timeout=1)
+        self.assertEqual(rc, -1)
+        self.assertIn("timeout after 1s", err)
+        self.assertEqual(len(et._ACTIVE_PROCS), 0,
+                         "timed-out process leaked out of the registry")
+
+
+class TestMode7Deadline(unittest.IsolatedAsyncioTestCase):
+    """Regression (A:521 follow-up): mode 7's run_nuclei used to be called
+    synchronously inside _execute_mode — the blocked event loop meant
+    asyncio.wait_for(--max-time) never fired and the deadline was a lie
+    (live proof 2026-10-06: 3s run under timeout=1 finished "normally").
+    With to_thread the wait_for timer must cancel within ~0.5s."""
+
+    async def test_nuclei_mode_cancellable_by_wait_for(self):
+        import time
+        from unittest.mock import patch, MagicMock
+        from core.state import SessionManager
+        from verd import _execute_mode
+
+        def slow_nuclei(*args, **kwargs):
+            time.sleep(2.0)  # sync blocking work, as a real tool run is
+            return []
+
+        with patch("core.external_tools.run_nuclei", new=slow_nuclei):
+            t0 = time.monotonic()
+            with self.assertRaises(asyncio.TimeoutError):
+                await asyncio.wait_for(
+                    _execute_mode(
+                        "nuclei", "example.com", "https://example.com",
+                        [{"url": "https://example.com"}], [],
+                        ["https://example.com"], {}, [], [], None,
+                        SessionManager(), {}, {}, MagicMock(), False,
+                        {}, lambda: None, 5, None),
+                    timeout=0.5)
+            elapsed = time.monotonic() - t0
+        self.assertLess(
+            elapsed, 1.5,
+            "wait_for could not cancel the mode — blocking call freezes the "
+            "event loop and --max-time stops working")
 
 
 if __name__ == "__main__":

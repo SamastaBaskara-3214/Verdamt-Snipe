@@ -733,6 +733,18 @@ async def async_main():
             )
         except asyncio.TimeoutError:
             w(f"Scan timed out after {max_time} seconds! Saving findings and proceeding to reporting...")
+            # Tracker A:521: cancellation never stops a thread already
+            # inside subprocess.run — terminate the tool processes or
+            # nuclei/dalfox keep hitting the target past --max-time and
+            # asyncio.run joins them at exit (process outlives report).
+            from core.external_tools import kill_active_procs
+            kill_active_procs(f"--max-time {max_time}s")
+            # Old path skipped save entirely: .state lost everything the
+            # timeout interrupted; resume would restart from stale data.
+            try:
+                save_project_state()
+            except Exception as e:
+                w(f"State save after timeout failed: {e}")
     else:
         await _execute_mode(
             mode, target, seed_url, services, subs, scan_urls, params,
@@ -771,7 +783,13 @@ async def _execute_mode(
         from core.external_tools import run_nuclei
         ntargets = [s["url"] for s in services] + scan_urls[:100]
         nauth = session_manager.auth_headers_for(target) if session_manager else {}
-        all_findings.extend(run_nuclei(ntargets, auth_headers=nauth or None, policy=policy))
+        # to_thread, NOT a direct call: run_nuclei is blocking — inline it
+        # froze the event loop, so asyncio.wait_for's --max-time timer
+        # never fired for mode 7 (verified live 2026-10-06: 3s nuclei run
+        # under timeout=1 completed "normally"). Cancellation + the
+        # kill_active_procs registry now terminate it properly.
+        all_findings.extend(await asyncio.to_thread(
+            run_nuclei, ntargets, auth_headers=nauth or None, policy=policy))
         i(f"Nuclei scan complete: {W}{len(all_findings)}{N} findings")
         save_project_state()
 

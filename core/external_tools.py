@@ -134,22 +134,71 @@ def _run_tool(tool_name: str, args: List[str], timeout: int = 120,
         env["all_proxy"] = proxy
 
     try:
-        proc = subprocess.run(
+        proc = subprocess.Popen(
             cmd,
-            input=input_data,
-            capture_output=True,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             text=True,
-            timeout=timeout,
             env=env,
         )
-        return proc.returncode, proc.stdout, proc.stderr
-    except subprocess.TimeoutExpired as exc:
-        w(f"{tool_name} timed out after {timeout}s (salvaging partial output)")
-        partial_stdout = exc.stdout.decode('utf-8', errors='ignore') if isinstance(exc.stdout, bytes) else (exc.stdout or "")
-        partial_stderr = exc.stderr.decode('utf-8', errors='ignore') if isinstance(exc.stderr, bytes) else (exc.stderr or "")
-        return -1, partial_stdout, f"timeout after {timeout}s: {partial_stderr}"
-    except Exception as exc:
+    except Exception as exc:  # same contract as old subprocess.run wrapper
         return -1, "", str(exc)
+    with _PROCS_LOCK:
+        _ACTIVE_PROCS.add(proc)
+    try:
+        out, err = proc.communicate(input=input_data, timeout=timeout)
+        return proc.returncode, out, err
+    except subprocess.TimeoutExpired:
+        w(f"{tool_name} timed out after {timeout}s (salvaging partial output)")
+        try:
+            proc.kill()
+        except Exception:
+            pass
+        out, err = proc.communicate()
+        return -1, out or "", f"timeout after {timeout}s: {err or ''}"
+    except Exception as exc:
+        try:
+            proc.kill()
+        except Exception:
+            pass
+        return -1, "", str(exc)
+    finally:
+        with _PROCS_LOCK:
+            _ACTIVE_PROCS.discard(proc)
+
+
+import threading as _threading
+
+# External-tool subprocesses currently running. asyncio cancellation cannot
+# stop a thread that is already inside subprocess.run — after --max-time
+# the tools (nuclei timeout=300, dalfox 180) kept hitting the target and
+# `asyncio.run` joined the executor at exit, so the process outlived
+# "SCAN COMPLETE" (verdict A:521, verified 2026-10-06). Track every Popen
+# so the deadline path can terminate them.
+_PROCS_LOCK = _threading.Lock()
+_ACTIVE_PROCS: "set[subprocess.Popen]" = set()
+
+
+def kill_active_procs(reason: str = "scan deadline") -> int:
+    """Terminate tracked tool subprocesses. Returns count terminated."""
+    with _PROCS_LOCK:
+        procs = list(_ACTIVE_PROCS)
+        _ACTIVE_PROCS.clear()
+    killed = 0
+    for p in procs:
+        try:
+            p.terminate()
+            killed += 1
+        except Exception:
+            pass
+        try:
+            p.kill()  # scanners don't need graceful shutdown
+        except Exception:
+            pass
+    if killed:
+        w(f"Killed {killed} in-flight tool process(es) ({reason})")
+    return killed
 
 
 # SUBFINDER — Subdomain Enumeration
