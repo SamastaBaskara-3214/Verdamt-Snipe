@@ -457,13 +457,28 @@ async def _method_ssl_cert_search(domain: str) -> List[dict]:
 
 
 async def _method_censys(domain: str) -> List[dict]:
-    """7. Censys — Certificate search via API-free endpoint."""
+    """7. Censys — Certificate search via keyless endpoint.
+
+    Non-200 (401/403 without an API key) RAISES instead of returning a
+    silent zero — hunt_origin's status table must be able to tell
+    "rejected" apart from "no results" (verified 2026-10-06)."""
     results = []
-    # Try Censys search
-    data = await _curl_json(
+    r = await _curl(
         f"https://search.censys.io/api/v2/hosts/search?q=services.tls.certificates.leaf_data.subject.common_name:{domain}&per_page=25",
         timeout=15
     )
+    if r["status"] != 200:
+        why = ("connection failed (blocked/unreachable)"
+               if r["status"] == 0 else
+               "keyless endpoint rejected (Censys API key required)")
+        raise RuntimeError(
+            f"HTTP {r['status']} — {why}")
+    data = None
+    if r["body"]:
+        try:
+            data = json.loads(r["body"])
+        except (json.JSONDecodeError, ValueError):
+            data = None
     if data and isinstance(data, dict):
         for hit in data.get("result", {}).get("hits", []):
             ip = hit.get("ip", "")
@@ -485,7 +500,13 @@ async def _method_fofa(domain: str) -> List[dict]:
         f"https://en.fofa.info/result?qbase64={fofa_b64}",
         timeout=10
     )
-    if data["status"] == 200 and data["body"]:
+    if data["status"] != 200:
+        why = ("connection failed (blocked/unreachable)"
+               if data["status"] == 0 else
+               "scrape rejected (Fofa anti-bot / layout change)")
+        raise RuntimeError(
+            f"HTTP {data['status']} — {why}")
+    if data["body"]:
         # Extract IPs from response HTML
         ip_matches = re.findall(r'\b(?:\d{1,3}\.){3}\d{1,3}\b', data["body"])
         seen = set()
@@ -961,17 +982,35 @@ async def hunt_origin(domain: str, subs: List[str] = None, proxy: str = None) ->
     # Phase 2: Aggregate candidates
     all_candidates = []
     method_stats = {}
+    # Status for EVERY source: hit / zero / ERROR. The old table filtered
+    # to count>0, hiding zero-result and crashed sources — the "17 methods"
+    # claim was unverifiable from the output (verified 2026-10-06).
+    status_rows = []
     for (name, _), result in zip(methods, results):
         if isinstance(result, list):
             method_stats[name] = len(result)
             all_candidates.extend(result)
+            status_rows.append([name, str(len(result)),
+                                "hit" if result else "zero"])
+        elif isinstance(result, BaseException):
+            method_stats[name] = 0
+            status_rows.append([name, "0",
+                                f"ERROR: {str(result)[:60]}"])
         else:
             method_stats[name] = 0
+            status_rows.append([name, "0", "zero"])
 
     # Show stats
-    stats_rows = [[name, str(count)] for name, count in method_stats.items() if count > 0]
-    if stats_rows:
-        draw_table(["SOURCE", "CANDIDATES"], stats_rows, title="Discovery Results")
+    n_hit = sum(1 for r in status_rows if r[2] == "hit")
+    n_err = sum(1 for r in status_rows if r[2].startswith("ERROR"))
+    if status_rows:
+        draw_table(["SOURCE", "CANDIDATES", "STATUS"], status_rows,
+                   title=f"Discovery Results ({n_hit}/{len(status_rows)} sources hit)")
+    if n_hit < len(status_rows):
+        i(f"Sources with candidates: {G}{n_hit}{N}/{len(status_rows)}"
+          + (f" — {n_err} errored" if n_err else ""))
+        w("Zero-hit keyless sources are normal: Censys/Fofa/SecurityTrails/"
+          "Shodan scrapers break or need API keys.")
 
     # Deduplicate by IP
     seen_ips = set()

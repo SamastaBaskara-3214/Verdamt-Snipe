@@ -130,12 +130,21 @@ def parse_mode(flags):
 
 # Flags that consume the following argv token as their value.
 _VALUE_FLAGS = {
-    "-p", "-i", "--proxy", "--proxy-list", "--proxy-rotate", "--impersonate",
+    "-p", "-i", "-r", "--proxy", "--proxy-list", "--proxy-rotate", "--impersonate",
     "--max-time", "--max-requests", "--max-concurrency", "--request-timeout",
     "--allowed-hosts", "--allowed-ports", "--audit-log", "--resume",
     "--bearer", "--bearer-file", "--bearer2", "--bearer2-file",
     "--cookie", "--cookie-file", "--cookie2", "--cookie2-file",
     "-H", "-H2",
+}
+
+# Single-dash aliases -> the long flags this file actually consumes.
+# Without this, `python3 verd.py -p socks5://... target` parsed the target
+# fine but proxy_url stayed None (only `--proxy` was ever read) and the
+# WHOLE scan went direct, silently — MED-OPSEC finding, verified 2026-10-06.
+_SHORT_ALIASES = {
+    "-p": "--proxy", "-i": "--impersonate", "-s": "--stealth",
+    "-t": "--turbo", "-r": "--resume",
 }
 
 
@@ -152,7 +161,7 @@ def parse_scan_args(argv: List[str]) -> Tuple[Optional[str], List[str], Optional
 
     # Legacy: ``--resume <path>`` as the very first argument.
     if argv[1] == "--resume":
-        flags = argv[1:]
+        flags = [_SHORT_ALIASES.get(t, t) for t in argv[1:]]
         if len(argv) >= 3 and not argv[2].startswith("-"):
             return None, flags, argv[2]
         return None, flags, None
@@ -173,6 +182,7 @@ def parse_scan_args(argv: List[str]) -> Tuple[Optional[str], List[str], Optional
 
     target_arg = argv[idx] if idx < len(argv) else None
     flags = (argv[1:idx] + argv[idx + 1:]) if idx < len(argv) else argv[1:]
+    flags = [_SHORT_ALIASES.get(t, t) for t in flags]
 
     resume_path = None
     if "--resume" in flags:

@@ -2,6 +2,15 @@ import threading
 from typing import Dict, List, Any
 from urllib.parse import urlparse
 
+# Multi-part public suffixes for the eTLD+1 sibling heuristic in
+# inject_auth (api.x vs www.x share no parent-child relation).
+_MULTI_PART_TLD = frozenset({
+    "co.uk", "com.au", "co.id", "net.id", "or.id", "web.id", "ac.id",
+    "sch.id", "go.id", "mil.id", "biz.id", "my.id",
+    "com.br", "co.jp", "co.in", "com.sg", "com.my", "co.nz", "co.za",
+    "com.mx", "com.tr", "com.tw", "com.hk", "com.cn", "com.ar", "com.pl",
+})
+
 class SessionManager:
     """
     Manages complex application states, tokens, and cookies across multi-step workflows.
@@ -30,12 +39,47 @@ class SessionManager:
             self.cookies[clean_domain].update(new_cookies)
 
     def inject_auth(self, url: str, headers: dict):
-        """Inject stored auth tokens/cookies into headers for a given URL."""
+        """Inject stored auth tokens/cookies into headers for a given URL.
+
+        Lookup: exact hostname -> suffix match either direction (www.x vs x
+        vs api.x). Exact-only here silently sent UNAUTHENTICATED requests
+        whenever seed host != service host (verified REAL, 2026-10-06).
+        Deliberately NO sorted-first fallback (unlike auth_headers_for):
+        never attach another domain's credentials."""
         domain = urlparse(url).hostname or urlparse(url).netloc
 
+        def _match(mapping):
+            if not mapping:
+                return None
+            host = (domain or "").strip().lower()
+            if host and host in mapping:
+                return mapping[host]
+            for key in sorted(mapping):
+                k = key.lower().split(":")[0]
+                if host and (host.endswith("." + k) or k.endswith("." + host)):
+                    return mapping[key]
+            # Sibling hosts under the same registrable domain
+            # (api.example.com vs www.example.com): parent-child suffix
+            # matching cannot relate them — compare eTLD+1 instead.
+            if host:
+                parts = host.split(".")
+                e = (".".join(parts[-3:])
+                     if len(parts) >= 3 and ".".join(parts[-2:]) in _MULTI_PART_TLD
+                     else ".".join(parts[-2:]))
+                if "." in e:
+                    for key in sorted(mapping):
+                        k = key.lower().split(":")[0]
+                        kp = k.split(".")
+                        ke = (".".join(kp[-3:])
+                              if len(kp) >= 3 and ".".join(kp[-2:]) in _MULTI_PART_TLD
+                              else ".".join(kp[-2:]))
+                        if ke == e:
+                            return mapping[key]
+            return None
+
         with self._lock:
-            auth_token = self.auth_tokens.get(domain)
-            cookie_dict = self.cookies.get(domain)
+            auth_token = _match(self.auth_tokens)
+            cookie_dict = _match(self.cookies)
 
         # Inject Bearer/Auth Token
         if auth_token:

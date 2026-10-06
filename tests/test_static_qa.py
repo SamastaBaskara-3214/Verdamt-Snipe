@@ -141,5 +141,101 @@ class TestPolicyDenyWarning(unittest.TestCase):
                         "budget hint missing from warning")
 
 
+class TestShortFlagAliases(unittest.TestCase):
+    """Regression: direct `python3 verd.py -p X` used to parse fine but
+    silently ignore the proxy (only --proxy was consumed) -> full-scan
+    direct. Aliases must normalize to the long flags verd.py reads."""
+
+    def test_proxy_short_flag_normalized(self):
+        from verd import parse_scan_args
+        target, flags, _ = parse_scan_args(
+            ["verd.py", "-p", "socks5://1.2.3.4:9050", "example.com"])
+        self.assertEqual(target, "example.com")
+        self.assertIn("--proxy", flags)
+        self.assertNotIn("-p", flags)
+        self.assertEqual(flags[flags.index("--proxy") + 1],
+                         "socks5://1.2.3.4:9050")
+
+    def test_stealth_turbo_resume_short_flags(self):
+        from verd import parse_scan_args
+        target, flags, resume = parse_scan_args(
+            ["verd.py", "example.com", "-s", "-t", "-r"])
+        self.assertEqual(target, "example.com")
+        self.assertEqual(flags, ["--stealth", "--turbo", "--resume"])
+        self.assertIsNone(resume)  # bare --resume keeps default resolution
+
+    def test_resume_short_flag_with_value_skips_target(self):
+        from verd import parse_scan_args
+        target, flags, resume = parse_scan_args(
+            ["verd.py", "-r", "outputs/example.com.state"])
+        self.assertIsNone(target)
+        self.assertEqual(resume, "outputs/example.com.state")
+
+    def test_dash_h_untouched(self):
+        from verd import parse_scan_args
+        target, flags, _ = parse_scan_args(
+            ["verd.py", "-H", "X-Forwarded-For: 1.2.3.4", "example.com"])
+        self.assertEqual(target, "example.com")
+        self.assertIn("-H", flags)  # header flags keep their short form
+
+
+class TestInjectAuthSuffixMatch(unittest.TestCase):
+    """Regression (verdict B:205, REAL MED-LOW): exact-hostname lookup made
+    requests to www/apex/subdomain variants go out WITHOUT auth silently."""
+
+    def _session(self):
+        from core.state import SessionManager
+        sm = SessionManager()
+        sm.register_token("www.example.com", "bearer", "TOKEN-123")
+        sm.update_cookies("www.example.com", {"sid": "abc"})
+        return sm
+
+    def test_apex_url_gets_www_token(self):
+        h = {}
+        self._session().inject_auth("https://example.com/api", h)
+        self.assertIn("TOKEN-123", h.get("Authorization", ""))
+
+    def test_subdomain_gets_token(self):
+        h = {}
+        self._session().inject_auth("https://api.example.com/v1", h)
+        self.assertIn("TOKEN-123", h.get("Authorization", ""))
+
+    def test_cookie_suffix_match(self):
+        h = {}
+        self._session().inject_auth("https://example.com/profile", h)
+        self.assertIn("sid=abc", h.get("Cookie", ""))
+
+    def test_unrelated_domain_gets_nothing(self):
+        h = {}
+        self._session().inject_auth("https://evil-corp.io/login", h)
+        self.assertNotIn("Authorization", h)
+        self.assertNotIn("Cookie", h)
+
+
+class TestOriginKeylessStatus(unittest.IsolatedAsyncioTestCase):
+    """Regression (origin-hunt honest reporting): rejected keyless endpoints
+    must surface as ERROR, not blend into silent zeros."""
+
+    def setUp(self):
+        from modules.waf import origin_hunter as oh
+        self.oh = oh
+
+    async def test_censys_non_200_raises(self):
+        from unittest.mock import AsyncMock, patch
+        with patch.object(self.oh, "_curl", new=AsyncMock(return_value={
+                "status": 401, "body": "", "headers": {}, "size": 0, "time": 0})):
+            with self.assertRaises(RuntimeError) as ctx:
+                await self.oh._method_censys("example.com")
+        self.assertIn("401", str(ctx.exception))
+
+    async def test_fofa_non_200_raises(self):
+        from unittest.mock import AsyncMock, patch
+        with patch.object(self.oh, "_curl", new=AsyncMock(return_value={
+                "status": 403, "body": "", "headers": {}, "size": 0, "time": 0})):
+            with self.assertRaises(RuntimeError) as ctx:
+                await self.oh._method_fofa("example.com")
+        self.assertIn("403", str(ctx.exception))
+
+
 if __name__ == "__main__":
     unittest.main()
