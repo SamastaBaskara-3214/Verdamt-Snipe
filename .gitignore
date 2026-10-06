@@ -1,0 +1,31 @@
+__pycache__/
+*.py[cod]
+*.pyo
+
+.venv/
+venv/
+env/
+.env
+.env.*
+
+outputs/
+output/
+scratch/
+
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+*.log
+
+.agents/
+.codex/
+.hermes/
+targets/
+
+# private documents (thesis etc.) — never push
+dump/
+# local codebase analysis scratch
+codebase-analysis/
+# one-off local patch script
+patch_ui.py

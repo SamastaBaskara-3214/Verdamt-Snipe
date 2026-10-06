@@ -1,0 +1,60 @@
+#!/bin/bash
+# snipe — Quick launcher for verdamt-snipe
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+VERD_DIR="$SCRIPT_DIR"
+VERD_PY="$VERD_DIR/verd.py"
+
+# Use .venv python if it exists
+if [ -f "$VERD_DIR/.venv/bin/python" ]; then
+    PYTHON_BIN="$VERD_DIR/.venv/bin/python"
+else
+    PYTHON_BIN="python3"
+fi
+
+# Help/version
+case "$1" in
+    /h|--help|-h) "$PYTHON_BIN" "$VERD_PY" /h; exit 0 ;;
+    /v|--version) "$PYTHON_BIN" "$VERD_PY" /v; exit 0 ;;
+    "") echo "Usage: snipe <mode 1-7> <target> [flags]"; exit 1 ;;
+esac
+
+
+
+MODE=""
+if [[ "$1" =~ ^[1-7]$ ]]; then
+    case "$1" in
+        1) MODE="--recon" ;;
+        2) MODE="--app" ;;
+        3) MODE="--assault" ;;
+        4) MODE="--poisoning" ;;
+        5) MODE="--full" ;;
+        6) MODE="--recon-light" ;;
+        7) MODE="--nuclei" ;;
+    esac
+    shift
+fi
+
+ARGS=()
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -s)  ARGS+=("--stealth"); shift ;;
+        -t)  ARGS+=("--turbo"); shift ;;
+        -r)  ARGS+=("--resume"); shift ;;
+        -j)  ARGS+=("--jwt"); shift ;;
+        -x)  ARGS+=("--stored-xss"); shift ;;
+        -id) ARGS+=("--idor"); shift ;;
+        -c)  ARGS+=("--crlf"); shift ;;
+        -hi) ARGS+=("--host-inject"); shift ;;
+        -a)  ARGS+=("--jwt" "--stored-xss" "--idor" "--crlf" "--host-inject"); shift ;;
+        -p)  if [ -n "$2" ]; then ARGS+=("--proxy" "$2"); shift 2; else ARGS+=("$1"); shift; fi ;;
+        -i)  if [ -n "$2" ]; then ARGS+=("--impersonate" "$2"); shift 2; else ARGS+=("$1"); shift; fi ;;
+        *)   ARGS+=("$1"); shift ;;
+    esac
+done
+
+if [ -n "$MODE" ]; then
+    ARGS+=("$MODE")
+fi
+
+exec "$PYTHON_BIN" "$VERD_PY" "${ARGS[@]}"

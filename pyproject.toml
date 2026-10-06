@@ -1,0 +1,60 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "verdamt-snipe"
+version = "1.3.0"
+description = "Async-first web security reconnaissance framework for authorized assessments."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+authors = [{ name = "Verdammt" }]
+keywords = ["security", "reconnaissance", "pentesting", "bug-bounty"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Intended Audience :: Information Technology",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Security",
+]
+dependencies = [
+  "Brotli==1.2.0",
+  "curl_cffi==0.16.3",
+  "httpx[http2]==0.28.1",
+  "playwright==1.63.0",
+  "python-interactsh @ git+https://github.com/theori-io/python-interactsh.git@f5ddbdba4b5127d70504562899d2795e0d79ed9c",
+  "rich==15.0.0",
+  "weasyprint==70.0",
+  "PySocks==1.7.1",
+  "PyJWT==2.15.1",
+  "mmh3==5.3.1",
+  "psutil==7.2.2",
+]
+
+[project.scripts]
+verdamt-snipe = "verd:main"
+
+[tool.setuptools]
+py-modules = ["verd"]
+
+[tool.setuptools.packages.find]
+include = ["core*", "modules*", "reports*", "runners*"]
+exclude = ["tests*"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+extend-exclude = ["dump", ".venv"]
+
+[tool.coverage.run]
+branch = true
+source = ["core", "modules", "reports", "runners", "verd"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
