@@ -2,21 +2,21 @@ import asyncio
 from urllib.parse import urlparse
 
 from core.external_tools import run_katana
-from modules.web.api_profiler import APIProfiler
+from modules.web.recon_crawlers.api_profiler import APIProfiler
 from modules.extras.arjun import AsyncParamBruteforcer, ParamBruteforcer
 from modules.auth.tester import AuthTester
-from modules.web.browser_recon import BrowserRecon
-from modules.web.crawler import DeepCrawler
-from modules.web.dom_xss import DOMXSSScanner
-from modules.web.csrf_verify import CSRFVerifier
-from modules.web.postmessage_analyzer import PostMessageAnalyzer
-from modules.web.clickjacking_verify import ClickjackingInspector
-from modules.web.websocket_recon import WebSocketSniffer
-from modules.web.proto_pollution_verify import ProtoPollutionVerifier
-from modules.web.oauth_auditor import OAuthAuditor
-from modules.web.cors_verify import CORSVerifier
-from modules.web.spa_crawler import SPACrawler
-from modules.web.graphql_profiler import GraphQLProfiler
+from modules.web.recon_crawlers.browser_recon import BrowserRecon
+from modules.web.recon_crawlers.crawler import DeepCrawler
+from modules.web.client_side.dom_xss import DOMXSSScanner
+from modules.web.client_side.csrf_verify import CSRFVerifier
+from modules.web.client_side.postmessage_analyzer import PostMessageAnalyzer
+from modules.web.client_side.clickjacking_verify import ClickjackingInspector
+from modules.web.recon_crawlers.websocket_recon import WebSocketSniffer
+from modules.web.client_side.proto_pollution_verify import ProtoPollutionVerifier
+from modules.web.api_auth.oauth_auditor import OAuthAuditor
+from modules.web.client_side.cors_verify import CORSVerifier
+from modules.web.recon_crawlers.spa_crawler import SPACrawler
+from modules.web.api_auth.graphql_profiler import GraphQLProfiler
 from modules.recon import ParamExtractor
 from runners.shared import merge_params, normalize_urls, validate_recon_urls
 
@@ -47,7 +47,7 @@ async def run_app_analysis(
     params = {}
 
     # OpenAPI / Swagger & Postman Spec Ingestion
-    from modules.web.openapi_parser import OpenAPIParser
+    from modules.web.api_auth.openapi_parser import OpenAPIParser
     api_parser = OpenAPIParser(seed_url)
 
     spec_paths = [

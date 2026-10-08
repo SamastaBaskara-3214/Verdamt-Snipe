@@ -4,7 +4,7 @@ import os
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from modules.web.dom_xss import DOMXSSScanner
+from modules.web.client_side.dom_xss import DOMXSSScanner
 
 
 class TestDOMXSSScanner(unittest.TestCase):

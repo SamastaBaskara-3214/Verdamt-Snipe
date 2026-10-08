@@ -13,10 +13,10 @@ class TestOriginServicesNotMutated(unittest.IsolatedAsyncioTestCase):
         }]
         jwt_mock = AsyncMock(return_value=[])
 
-        with patch("modules.web.jwt_hunter.scan_jwt", new=jwt_mock), \
-             patch("modules.web.host_header.scan_host_header",
+        with patch("modules.web.api_auth.jwt_hunter.scan_jwt", new=jwt_mock), \
+             patch("modules.web.server_side.host_header.scan_host_header",
                    new=AsyncMock(return_value=[])), \
-             patch("modules.web.crlf.scan_crlf",
+             patch("modules.web.server_side.crlf.scan_crlf",
                    new=AsyncMock(return_value=[])), \
              patch("modules.auth.bypass.WAFBypass.h2_smuggle_check",
                    return_value={}), \

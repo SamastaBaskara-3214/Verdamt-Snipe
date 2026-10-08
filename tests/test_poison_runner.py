@@ -259,7 +259,7 @@ class TestCancellationClosesSockets(unittest.TestCase):
 
     def test_cancelled_slowloris_still_closes_writer(self):
         from unittest.mock import patch
-        from modules.web.connection_exhaust import ConnectionExhaust
+        from modules.web.server_side.connection_exhaust import ConnectionExhaust
 
         ex = ConnectionExhaust("https://example.com", timeout=30)
         fake_writer = MagicMock()
@@ -283,7 +283,7 @@ class TestCancellationClosesSockets(unittest.TestCase):
 
     def test_cancelled_smuggle_request_still_closes_writer(self):
         from unittest.mock import patch
-        from modules.web import smuggling
+        from modules.web.server_side import smuggling
 
         fake_writer = MagicMock()
         fake_writer.drain = AsyncMock()
@@ -640,7 +640,7 @@ class TestBudgetAccounting(unittest.IsolatedAsyncioTestCase):
         from unittest.mock import patch
         p = ScanPolicy("example.com", max_requests=700, max_concurrency=50)
         state = self._state(p)
-        with patch("modules.web.connection_exhaust.ConnectionExhaust.run",
+        with patch("modules.web.server_side.connection_exhaust.ConnectionExhaust.run",
                    new=AsyncMock(return_value={})) as run_mock:
             await phase_connection_exhaust(state)
         run_mock.assert_not_called()
@@ -651,14 +651,14 @@ class TestBudgetAccounting(unittest.IsolatedAsyncioTestCase):
         from unittest.mock import patch
         p = ScanPolicy("example.com", max_requests=5000, max_concurrency=50)
         state = self._state(p)
-        with patch("modules.web.connection_exhaust.ConnectionExhaust.run",
+        with patch("modules.web.server_side.connection_exhaust.ConnectionExhaust.run",
                    new=AsyncMock(return_value={})) as run_mock:
             await phase_connection_exhaust(state)
         run_mock.assert_called_once()
         self.assertEqual(p.requests_sent, 750)
 
     def test_smuggle_bound_is_documented_not_invented(self):
-        from modules.web.smuggling import SMUGGLE_REQUEST_BOUND, TE_TE_OBFUSCATIONS
+        from modules.web.server_side.smuggling import SMUGGLE_REQUEST_BOUND, TE_TE_OBFUSCATIONS
         self.assertEqual(SMUGGLE_REQUEST_BOUND, 6 + 2 * len(TE_TE_OBFUSCATIONS) + 8)
         self.assertGreater(SMUGGLE_REQUEST_BOUND, 10)
 

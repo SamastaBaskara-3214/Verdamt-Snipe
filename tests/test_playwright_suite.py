@@ -2,14 +2,14 @@ import asyncio
 import unittest
 from unittest.mock import MagicMock
 
-from modules.web.csrf_verify import CSRFVerifier
-from modules.web.postmessage_analyzer import PostMessageAnalyzer
-from modules.web.clickjacking_verify import ClickjackingInspector
-from modules.web.websocket_recon import WebSocketSniffer
-from modules.web.proto_pollution_verify import ProtoPollutionVerifier
-from modules.web.oauth_auditor import OAuthAuditor
-from modules.web.cors_verify import CORSVerifier
-from modules.web.spa_crawler import SPACrawler
+from modules.web.client_side.csrf_verify import CSRFVerifier
+from modules.web.client_side.postmessage_analyzer import PostMessageAnalyzer
+from modules.web.client_side.clickjacking_verify import ClickjackingInspector
+from modules.web.recon_crawlers.websocket_recon import WebSocketSniffer
+from modules.web.client_side.proto_pollution_verify import ProtoPollutionVerifier
+from modules.web.api_auth.oauth_auditor import OAuthAuditor
+from modules.web.client_side.cors_verify import CORSVerifier
+from modules.web.recon_crawlers.spa_crawler import SPACrawler
 
 
 class TestPlaywrightSuiteModules(unittest.TestCase):
@@ -51,6 +51,7 @@ class TestPlaywrightSuiteModules(unittest.TestCase):
             from unittest.mock import AsyncMock, patch
             mock_context = AsyncMock()
             mock_page = AsyncMock()
+            mock_page.on = MagicMock()
             mock_context.new_page.return_value = mock_page
             mock_page.evaluate.return_value = {}
             mock_page.query_selector_all.return_value = []

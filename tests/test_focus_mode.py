@@ -10,11 +10,11 @@ class TestFocusMode(unittest.IsolatedAsyncioTestCase):
                    return_value=[]) as nuclei_mock, \
              patch("runners.vuln_assault.run_dalfox",
                    return_value=[]) as dalfox_mock, \
-             patch("modules.web.jwt_hunter.scan_jwt",
+             patch("modules.web.api_auth.jwt_hunter.scan_jwt",
                    new=AsyncMock(return_value=[])) as jwt_mock, \
-             patch("modules.web.host_header.scan_host_header",
+             patch("modules.web.server_side.host_header.scan_host_header",
                    new=AsyncMock(return_value=[])), \
-             patch("modules.web.crlf.scan_crlf",
+             patch("modules.web.server_side.crlf.scan_crlf",
                    new=AsyncMock(return_value=[])):
             findings, _ = await run_vuln_assault(
                 "example.com", [],
@@ -35,11 +35,11 @@ class TestFocusMode(unittest.IsolatedAsyncioTestCase):
                    return_value=[]) as nuclei_mock, \
              patch("runners.vuln_assault.run_dalfox",
                    return_value=[]) as dalfox_mock, \
-             patch("modules.web.jwt_hunter.scan_jwt",
+             patch("modules.web.api_auth.jwt_hunter.scan_jwt",
                    new=AsyncMock(return_value=[])), \
-             patch("modules.web.host_header.scan_host_header",
+             patch("modules.web.server_side.host_header.scan_host_header",
                    new=AsyncMock(return_value=[])), \
-             patch("modules.web.crlf.scan_crlf",
+             patch("modules.web.server_side.crlf.scan_crlf",
                    new=AsyncMock(return_value=[])):
             await run_vuln_assault(
                 "example.com", [],

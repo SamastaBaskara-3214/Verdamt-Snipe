@@ -19,7 +19,7 @@ from core.state import SessionManager
 from core.async_network import AsyncNetworkEngine
 from core.project import ProjectState, sanitize_filename
 from modules.scanners import VulnVerifier, AsyncVulnEngine
-from modules.web.blind_sqli_extract import BlindSQLiExtractor
+from modules.web.server_side.blind_sqli_extract import BlindSQLiExtractor
 from runners.shared import inject_query_payload
 from reports.engine import ReportEngine, finding_cvss
 from runners.surface import run_surface_scan

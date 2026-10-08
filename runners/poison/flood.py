@@ -476,7 +476,7 @@ async def phase_payload_flood(state: PoisonState):
     if auto_chain_targets["sqli"] and state.time_left > 8:
         for url, param in auto_chain_targets["sqli"][:3]:
             try:
-                from modules.web.sqli_extractor import SQLiExtractor
+                from modules.web.server_side.sqli_extractor import SQLiExtractor
                 extractor = SQLiExtractor(state.async_engine, state.session_manager)
                 extracted = await extractor.extract(url, param)
                 if extracted:
@@ -487,7 +487,7 @@ async def phase_payload_flood(state: PoisonState):
     if auto_chain_targets["lfi"] and state.time_left > 12:
         for url, param in auto_chain_targets["lfi"][:3]:
             try:
-                from modules.web.lfi_rce_chain import LFItoRCE
+                from modules.web.server_side.lfi_rce_chain import LFItoRCE
                 chain = LFItoRCE(state.async_engine, state.session_manager)
                 rce_findings = await chain.exploit(url, param)
                 if rce_findings:

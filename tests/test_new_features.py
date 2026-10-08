@@ -1,6 +1,6 @@
 import unittest
 from core.secret_scanner import SecretScanner, shannon_entropy
-from modules.web.graphql_profiler import GraphQLProfiler
+from modules.web.api_auth.graphql_profiler import GraphQLProfiler
 
 
 class TestRoadmapEnhancements(unittest.TestCase):

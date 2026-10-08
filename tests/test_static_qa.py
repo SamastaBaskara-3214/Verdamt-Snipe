@@ -75,7 +75,7 @@ class TestBrowserReconExtractionLive(unittest.IsolatedAsyncioTestCase):
     RuntimeWarning 'coroutine was never awaited')."""
 
     def setUp(self):
-        import modules.web.browser_recon as br
+        import modules.web.recon_crawlers.browser_recon as br
         self.br = br
         br.PLAYWRIGHT_AVAILABLE = True
 

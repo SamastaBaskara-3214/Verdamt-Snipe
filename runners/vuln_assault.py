@@ -227,11 +227,11 @@ async def run_vuln_assault(
     # Sesi 3: Web vuln modules (PARALLEL via gather)
     primary_url = services[0]["url"] if services else f"https://{target}/"
 
-    from modules.web.jwt_hunter import scan_jwt
-    from modules.web.host_header import scan_host_header
-    from modules.web.crlf import scan_crlf
-    from modules.web.stored_xss import StoredXSSHunter
-    from modules.web.idor import scan_idor
+    from modules.web.api_auth.jwt_hunter import scan_jwt
+    from modules.web.server_side.host_header import scan_host_header
+    from modules.web.server_side.crlf import scan_crlf
+    from modules.web.client_side.stored_xss import StoredXSSHunter
+    from modules.web.server_side.idor import scan_idor
 
     async def _run_jwt():
         if not web_module_enabled("jwt"):

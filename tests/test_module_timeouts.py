@@ -13,11 +13,11 @@ class TestModuleTimeouts(unittest.IsolatedAsyncioTestCase):
 
         with patch.dict(vuln_assault.MODULE_TIMEOUTS, {"jwt": 0.3}), \
              patch("runners.vuln_assault.w") as mock_w, \
-             patch("modules.web.jwt_hunter.scan_jwt",
+             patch("modules.web.api_auth.jwt_hunter.scan_jwt",
                    new=AsyncMock(side_effect=slow_jwt)), \
-             patch("modules.web.host_header.scan_host_header",
+             patch("modules.web.server_side.host_header.scan_host_header",
                    new=AsyncMock(return_value=[])), \
-             patch("modules.web.crlf.scan_crlf",
+             patch("modules.web.server_side.crlf.scan_crlf",
                    new=AsyncMock(return_value=[])), \
              patch("runners.vuln_assault.run_nuclei", return_value=[]), \
              patch("runners.vuln_assault.run_dalfox", return_value=[]):

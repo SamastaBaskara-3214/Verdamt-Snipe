@@ -33,9 +33,9 @@ class _AssaultHarness(unittest.IsolatedAsyncioTestCase):
         return [
             patch("runners.vuln_assault.run_nuclei", return_value=[]),
             patch("runners.vuln_assault.run_dalfox", return_value=[]),
-            patch("modules.web.jwt_hunter.scan_jwt", new=AsyncMock(return_value=[])),
-            patch("modules.web.host_header.scan_host_header", new=AsyncMock(return_value=[])),
-            patch("modules.web.crlf.scan_crlf", new=AsyncMock(return_value=[])),
+            patch("modules.web.api_auth.jwt_hunter.scan_jwt", new=AsyncMock(return_value=[])),
+            patch("modules.web.server_side.host_header.scan_host_header", new=AsyncMock(return_value=[])),
+            patch("modules.web.server_side.crlf.scan_crlf", new=AsyncMock(return_value=[])),
         ]
 
     async def _run(self, allow_post=None):
@@ -91,7 +91,7 @@ class TestOOBTaskBuild(unittest.TestCase):
 
 class TestStoredXSSGate(unittest.IsolatedAsyncioTestCase):
     def _hunter(self, allow_post):
-        from modules.web.stored_xss import StoredXSSHunter
+        from modules.web.client_side.stored_xss import StoredXSSHunter
         engine = MagicMock()
         engine.ahttp_send = AsyncMock(return_value={"status": 200, "body": "<form>"})
         kwargs = {} if allow_post is None else {"allow_post": allow_post}
@@ -112,7 +112,7 @@ class TestStoredXSSGate(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(f["confidence"], "confirmed")
 
     async def test_tanpa_post_404_tidak_dilaporkan(self):
-        from modules.web.stored_xss import StoredXSSHunter
+        from modules.web.client_side.stored_xss import StoredXSSHunter
         engine = MagicMock()
         engine.ahttp_send = AsyncMock(return_value={"status": 404, "body": ""})
         hunter = StoredXSSHunter(["https://a.test/x"], engine, allow_post=False)
@@ -120,7 +120,7 @@ class TestStoredXSSGate(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(findings, [])
 
     async def test_default_mode_masih_flux_post_lama(self):
-        from modules.web.stored_xss import StoredXSSHunter
+        from modules.web.client_side.stored_xss import StoredXSSHunter
         engine = MagicMock()
         engine.ahttp_send = AsyncMock(return_value={"status": 404, "body": ""})
         hunter = StoredXSSHunter(["https://a.test/x"], engine)  # default True

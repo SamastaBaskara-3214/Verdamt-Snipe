@@ -25,7 +25,7 @@ from .wave import _hold_for_backoff
 
 async def phase_connection_exhaust(state: PoisonState):
     """Connection Exhaust + adaptive monitoring."""
-    from modules.web.connection_exhaust import ConnectionExhaust, EXHAUST_SOCKETS
+    from modules.web.server_side.connection_exhaust import ConnectionExhaust, EXHAUST_SOCKETS
 
     # Exhaust uses raw sockets (never billed by the policy), so it must stop
     # when the budget that governs every other generator is spent — and hold
@@ -73,7 +73,7 @@ async def phase_connection_exhaust(state: PoisonState):
 
 async def phase_cache_poison(state: PoisonState):
     """Cache poisoning probe + delivery."""
-    from modules.web.cache_poison import probe_unkeyed_headers, deliver_poisoned_payload
+    from modules.web.server_side.cache_poison import probe_unkeyed_headers, deliver_poisoned_payload
 
     if not _budget_ok(state):
         return
@@ -108,7 +108,7 @@ async def phase_cache_poison(state: PoisonState):
 
 async def phase_smuggling(state: PoisonState):
     """HTTP smuggling scan."""
-    from modules.web.smuggling import scan_smuggling, SMUGGLE_REQUEST_BOUND
+    from modules.web.server_side.smuggling import scan_smuggling, SMUGGLE_REQUEST_BOUND
 
     if not _budget_ok(state):
         return
@@ -179,7 +179,7 @@ async def phase_oob(state: PoisonState):
     # Inject blind XSS payloads
     if oob.interactsh.domain and state.time_left > 8:
         try:
-            from modules.web.blind_xss import BlindXSSHunter
+            from modules.web.client_side.blind_xss import BlindXSSHunter
             hunter = BlindXSSHunter(
                 state.async_engine,
                 interactsh_domain=oob.interactsh.domain,
@@ -211,7 +211,7 @@ async def phase_oob(state: PoisonState):
                     break
             if param and url:
                 try:
-                    from modules.web.ssrf_scanner import SSRFScanner
+                    from modules.web.server_side.ssrf_scanner import SSRFScanner
                     scanner = SSRFScanner(state.async_engine, state.session_manager)
                     ssrf_findings = await scanner.scan(url, param)
                     if ssrf_findings:
