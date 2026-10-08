@@ -587,6 +587,9 @@ async def async_main():
     impersonate_browser = None
     proxy_rotate = 0
     max_time = None
+    # --no-proxy: ignore VERDAMT_PROXY env (explicit --proxy/--proxy-list
+    # still win; this only kills the automatic env fallback).
+    no_proxy = "--no-proxy" in flags
     for idx, f in enumerate(flags):
         if f == "--max-time" and idx + 1 < len(flags):
             try:
@@ -622,6 +625,7 @@ async def async_main():
         proxy=proxy_url,
         proxy_file=proxy_list,
         rotate=proxy_rotate,
+        use_env=not no_proxy,
     )
     if proxy_mgr.current_proxy:
         s(f"Proxy Active: {proxy_mgr.current_proxy} "
@@ -718,7 +722,8 @@ async def async_main():
             w("TURBO MODE ACTIVE: Maxing out concurrency. No delays.")
         if settings.get('proxy') and not proxy_url:
             proxy_url = settings['proxy']
-            proxy_mgr = setup_proxy(proxy=proxy_url, proxy_file=proxy_list, rotate=proxy_rotate)
+            proxy_mgr = setup_proxy(proxy=proxy_url, proxy_file=proxy_list,
+                                rotate=proxy_rotate, use_env=not no_proxy)
             if proxy_mgr.current_proxy:
                 s(f"Proxy Active: {proxy_mgr.current_proxy}")
         if settings.get('impersonate') and not impersonate_browser:

@@ -122,6 +122,14 @@ class AuditLogger:
             entry["error"] = error
         self._write_entry(entry)
 
+    def log_refund(self, url: str = "", reason: str = "",
+                   trace_id: Optional[str] = None) -> None:
+        """A charged request that never dispatched (budget returned)."""
+        entry = {"type": "refund", "url": url, "reason": reason}
+        if trace_id:
+            entry["trace_id"] = trace_id
+        self._write_entry(entry)
+
     def log_finding(
         self,
         title: str,

@@ -475,7 +475,7 @@ def http_send(url: str, method: str = "GET", headers: dict = None,
                 "waf": [],
             }
         if getattr(policy, "dry_run", False):
-            policy.refund_request()  # simulation must not burn real budget
+            policy.refund_request(reason="dry_run", url=url, trace_id=trace)
             return {
                 "status": 200,
                 "error": None,
@@ -524,6 +524,9 @@ def http_send(url: str, method: str = "GET", headers: dict = None,
                 except (ValueError, TypeError):
                     wait_time = 5
                 log_warn(f"Rate limited (429). Backing off {wait_time}s... ({max_retries} retries left)")
+                AuditLogger.get_instance().log_response(
+                    url, method, status_code=429,
+                    elapsed=result.get("time") or 0.0, trace_id=trace)
                 time.sleep(wait_time)
                 return http_send(url, method=method, headers=headers, data=data,
                                  timeout=timeout, bypass=bypass, raw=raw,
@@ -594,14 +597,30 @@ def http_send(url: str, method: str = "GET", headers: dict = None,
             req_bytes += d if isinstance(d, bytes) else d.encode()
         out["raw"] = req_bytes.decode("latin-1", errors="replace")
 
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(timeout)
-        if p.scheme == "https":
-            ctx = ssl.create_default_context()
-            ctx.check_hostname = False
-            ctx.verify_mode = ssl.CERT_NONE
-            sock = ctx.wrap_socket(sock, server_hostname=host)
-        sock.connect((host, port))
+        # OPSEC: the raw fallback must honor the active proxy too — a direct
+        # connect here leaked real IP whenever curl_cffi was unavailable.
+        from core.proxy_manager import resolve_proxy
+        proxy_url = resolve_proxy()
+        if proxy_url:
+            from core.proxy_manager import _blocking_proxied_socket
+            tunneled = _blocking_proxied_socket(proxy_url, host, port, timeout)
+            tunneled.settimeout(timeout)
+            if p.scheme == "https":
+                ctx = ssl.create_default_context()
+                ctx.check_hostname = False
+                ctx.verify_mode = ssl.CERT_NONE
+                sock = ctx.wrap_socket(tunneled, server_hostname=host)
+            else:
+                sock = tunneled
+        else:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(timeout)
+            if p.scheme == "https":
+                ctx = ssl.create_default_context()
+                ctx.check_hostname = False
+                ctx.verify_mode = ssl.CERT_NONE
+                sock = ctx.wrap_socket(sock, server_hostname=host)
+            sock.connect((host, port))
         sock.sendall(req_bytes)
 
         resp = b""
@@ -656,6 +675,9 @@ def http_send(url: str, method: str = "GET", headers: dict = None,
             wait_time = min(wait_time, 30)
             if max_retries > 0:
                 log_warn(f"Rate limited (429). Backing off {wait_time}s... ({max_retries} retries left)")
+                AuditLogger.get_instance().log_response(
+                    url, method, status_code=429,
+                    elapsed=out.get("time") or 0.0, trace_id=trace)
                 time.sleep(wait_time)
                 return http_send(url, method=method, headers=headers, data=data,
                                  timeout=timeout, bypass=bypass, raw=raw,
@@ -818,7 +840,8 @@ class AsyncNetworkEngine:
                     "url": url,
                 }
             if getattr(self.policy, "dry_run", False):
-                self.policy.refund_request()  # simulation must not burn budget
+                self.policy.refund_request(reason="dry_run", url=url,
+                                           trace_id=trace)
                 return {
                     "status": 200,
                     "error": None,
@@ -844,7 +867,8 @@ class AsyncNetworkEngine:
         acquire_timeout = min(timeout + 5, 30) if timeout else 15
         if not await self.host_limiter.acquire(hostname, timeout=acquire_timeout):
             if self.policy:
-                self.policy.refund_request()  # never dispatched
+                self.policy.refund_request(reason=f"rate_limited:host {hostname}",
+                                           url=url, trace_id=trace)
             return {
                 "status": 0, "error": f"rate_limited: host {hostname} backoff active",
                 "time": 0, "waf": [], "body": "", "headers": {},
@@ -857,7 +881,8 @@ class AsyncNetworkEngine:
         except asyncio.TimeoutError:
             self.host_limiter.release(hostname, 0)
             if self.policy:
-                self.policy.refund_request()  # never dispatched
+                self.policy.refund_request(reason="concurrency_budget_exhausted",
+                                           url=url, trace_id=trace)
             return {
                 "status": 0, "error": "concurrency_budget_exhausted",
                 "time": 0, "waf": [], "body": "", "headers": {},
@@ -872,7 +897,8 @@ class AsyncNetworkEngine:
                 if proxy_mgr:
                     proxy_mgr.record_request(error=True)
                 if self.policy:
-                    self.policy.refund_request()  # never dispatched
+                    self.policy.refund_request(reason="circuit_open",
+                                               url=url, trace_id=trace)
                 return {
                     "status": 0, "error": f"circuit_open: cooling down ({cooldown:.0f}s remaining)",
                     "time": 0, "waf": [], "body": "", "headers": {},

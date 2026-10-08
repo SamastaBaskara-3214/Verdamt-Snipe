@@ -292,6 +292,7 @@ def setup_proxy(
     proxy_file: str = None,
     rotate: int = 0,
     check_health: bool = False,
+    use_env: bool = True,
 ) -> ProxyManager:
     """One-liner proxy setup. Returns configured ProxyManager.
     
@@ -304,7 +305,8 @@ def setup_proxy(
     Returns:
         Configured ProxyManager with env vars set.
     """
-    global GLOBAL_PROXY_MGR
+    global GLOBAL_PROXY_MGR, _ENV_FALLBACK_OK
+    _ENV_FALLBACK_OK = use_env
     pm = ProxyManager()
 
     # Only load from --proxy flag, NOT from env auto
@@ -320,7 +322,9 @@ def setup_proxy(
 
     # Fall back to VERDAMT_PROXY: load_from_env() had no callers, so an
     # env-configured proxy was silently ignored unless --proxy was passed.
-    if not pm.current_proxy:
+    # use_env=False (--no-proxy) keeps the scan direct even when the env
+    # is configured — the OPSEC escape hatch.
+    if use_env and not pm.current_proxy:
         pm.load_from_env()
 
     # Enable rotation
@@ -343,6 +347,11 @@ def setup_proxy(
 # was configured. Every raw-socket module goes through this instead.
 # ---------------------------------------------------------------------------
 
+# resolve_proxy() env fallback gate: setup_proxy(use_env=False) (--no-proxy)
+# must also stop OUR code from picking VERDAMT_PROXY up later.
+_ENV_FALLBACK_OK = True
+
+
 def resolve_proxy(proxy: str = None) -> Optional[str]:
     """Proxy to use: explicit argument > global manager > VERDAMT_PROXY."""
     if proxy:
@@ -350,6 +359,8 @@ def resolve_proxy(proxy: str = None) -> Optional[str]:
     mgr = get_global_proxy_manager()
     if mgr and mgr.current_proxy:
         return mgr.current_proxy
+    if not _ENV_FALLBACK_OK:
+        return None
     return os.environ.get("VERDAMT_PROXY") or None
 
 
@@ -386,7 +397,9 @@ def _blocking_proxied_socket(proxy_url: str, host: str, port: int,
         ptype,
         proxy_host,
         proxy_port,
-        rdns=scheme in ("socks5h", "socks4a"),   # proxy resolves DNS, no leak
+        rdns=scheme in ("socks5h", "socks4a", "http", "https"),
+        # ^ http(s) CONNECT forwards the NAME — no local DNS query (no leak,
+        #   and fake/test hostnames reach the proxy for resolution).
         username=username,
         password=password,
     )

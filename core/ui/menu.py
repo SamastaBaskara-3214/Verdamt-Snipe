@@ -322,6 +322,7 @@ def draw_help_screen():
         ("-s  --stealth", "Camouflage + jitter + headers"),
         ("-t  --turbo", "Max concurrency (no delays)"),
         ("-p  --proxy", "Proxy URL (socks5://ip:port)"),
+        ("    --no-proxy", "Ignore VERDAMT_PROXY env fallback"),
         ("-i  --impersonate", "TLS fingerprint spoof"),
         ("-r  --resume", "Resume from saved state"),
         ("    --max-time", "Global scan timeout in seconds"),

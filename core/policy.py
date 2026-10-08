@@ -256,16 +256,24 @@ class ScanPolicy:
         )
         return PolicyDecision(True)
 
-    def refund_request(self) -> None:
+    def refund_request(self, reason: str = "", url: str = "",
+                       trace_id: Optional[str] = None) -> None:
         """Return one budget unit when an authorized request never dispatches.
 
         Covers dry-run simulation, host-backoff, concurrency timeout and
         circuit-open paths — otherwise max_requests could exhaust with zero
-        packets sent (or a dry-run burning real budget).
+        packets sent (or a dry-run burning real budget). Writes a type=refund
+        audit entry so jsonl readers can tell "never dispatched" from a
+        missing response entry.
         """
+        refunded = False
         with self._lock:
             if self._requests_sent > 0:
                 self._requests_sent -= 1
+                refunded = True
+        if refunded:
+            AuditLogger.get_instance().log_refund(
+                url=url, reason=reason or "unspecified", trace_id=trace_id)
 
     def charge(self, n: int, reason: str = "tool") -> int:
         """Debit n requests for a generator that bypasses ahttp_send.
