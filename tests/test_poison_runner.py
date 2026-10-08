@@ -341,7 +341,7 @@ class TestPhase0Budget(unittest.IsolatedAsyncioTestCase):
             wave_calls.append(state.elapsed)
 
         with patch("modules.waf.bypass_engine.waf_bypass_pipeline", fast_phase0), \
-             patch("runners.poison._adaptive_wave_loop", recorder), \
+             patch("runners.poison.orchestrator._adaptive_wave_loop", recorder), \
              patch("modules.wordlists.WordlistProvider") as wl:
             wl.return_value._local = {"dir": "x"}
             wl.return_value.summary.return_value = ""
@@ -370,7 +370,7 @@ class TestPhase0Budget(unittest.IsolatedAsyncioTestCase):
             wave_calls.append(state.elapsed)
 
         with patch("modules.waf.bypass_engine.waf_bypass_pipeline", hung_phase0), \
-             patch("runners.poison._adaptive_wave_loop", recorder), \
+             patch("runners.poison.orchestrator._adaptive_wave_loop", recorder), \
              patch("modules.wordlists.WordlistProvider") as wl:
             wl.return_value._local = {"dir": "x"}
             wl.return_value.summary.return_value = ""
@@ -510,7 +510,7 @@ class TestLatencyObserverWiring(unittest.IsolatedAsyncioTestCase):
 
         with patch("modules.waf.bypass_engine.waf_bypass_pipeline",
                    new=AsyncMock(return_value={})), \
-             patch("runners.poison._adaptive_wave_loop", recorder), \
+             patch("runners.poison.orchestrator._adaptive_wave_loop", recorder), \
              patch("modules.wordlists.WordlistProvider") as wl:
             wl.return_value._local = {"dir": "x"}
             wl.return_value.summary.return_value = ""
@@ -578,7 +578,7 @@ class TestBackoffGate(unittest.IsolatedAsyncioTestCase):
         state.async_engine = MagicMock()
         state.async_engine.host_limiter = lim
 
-        with patch("runners.poison._run_ffuf", new=AsyncMock(return_value=[])) as ffuf:
+        with patch("runners.poison.flood._run_ffuf", new=AsyncMock(return_value=[])) as ffuf:
             await phase_bruteforce(state)
             await phase_bruteforce(state)
 
@@ -587,7 +587,7 @@ class TestBackoffGate(unittest.IsolatedAsyncioTestCase):
 
         # backoff expired → generator runs again
         lim._hosts["example.com"].backoff_until = time.time() - 1
-        with patch("runners.poison._run_ffuf", new=AsyncMock(return_value=[])) as ffuf2:
+        with patch("runners.poison.flood._run_ffuf", new=AsyncMock(return_value=[])) as ffuf2:
             await phase_bruteforce(state)
         self.assertGreaterEqual(ffuf2.call_count, 1)
 
@@ -618,7 +618,7 @@ class TestBudgetAccounting(unittest.IsolatedAsyncioTestCase):
         from unittest.mock import patch
         p = ScanPolicy("example.com", max_requests=120, max_concurrency=50)
         words = [f"w{i}" for i in range(1000)]
-        with patch("runners.poison._find_tool", return_value="/usr/bin/true"):
+        with patch("runners.poison.flood._find_tool", return_value="/usr/bin/true"):
             out = asyncio.run(_run_ffuf("https://example.com/", words, "",
                                         10, timeout=5, policy=p))
         # 120 room - 10 calibration allowance = 110 words, charge 110+10
@@ -629,7 +629,7 @@ class TestBudgetAccounting(unittest.IsolatedAsyncioTestCase):
         from core.policy import ScanPolicy
         from unittest.mock import patch
         p = ScanPolicy("example.com", max_requests=5, max_concurrency=50)
-        with patch("runners.poison._find_tool", return_value="/usr/bin/true"):
+        with patch("runners.poison.flood._find_tool", return_value="/usr/bin/true"):
             out = asyncio.run(_run_ffuf("https://example.com/", ["a"] * 50,
                                         "", 10, timeout=5, policy=p))
         self.assertEqual(out, [])
