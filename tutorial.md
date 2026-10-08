@@ -454,6 +454,7 @@ python3 verd.py --resume outputs/target.state
 | `--max-time N` | value | Wave/deadline budget untuk poisoning mode |
 | `--dry-run` | flag | Validasi policy + mutasi payload tanpa kirim request |
 | `--audit-log <file>` | value | Structured audit log `.jsonl` |
+| — (pasca-scan) | — | Replay: `python3 -m core.audit outputs/audit_<target>.jsonl -q <kata>` → curl per request; `--responses` → status/latency tiap dispatch |
 | `--proxy <url>` | value | Proxy egress (OPSEC); `--proxy-list <f>`, `--proxy-rotate` |
 | `--impersonate <t>` | value | TLS fingerprint target (chrome/safari/firefox/…) |
 | `--setup-wordlists` | flag | Unduh wordlist resmi (dirs/params/auth) |

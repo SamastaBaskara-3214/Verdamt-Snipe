@@ -199,6 +199,16 @@ setTimeout(() => {{
 
         # 2. Server-Side HTTP Vulnerabilities (cURL)
 
+        audit_curl = finding.get("audit_curl")
+        if audit_curl:
+            return {
+                "format": "bash",
+                "code": audit_curl,
+                "instructions": "Exact request recorded in the scan audit trail "
+                                "(replayed verbatim: method, headers, payload). "
+                                "Run it to reproduce — generic template not used.",
+            }
+
         base = "curl -sk"
         if "xxe" in ftype:
             payload = '<?xml version="1.0"?><!DOCTYPE root [<!ENTITY xxe SYSTEM "file:///etc/passwd">]><root>&xxe;</root>'
@@ -270,9 +280,17 @@ setTimeout(() => {{
 
         poc_data = PoCGenerator.generate_poc(finding)
         if poc_data.get("code"):
+            desc = poc_data["instructions"]
+            evidence = (finding.get("evidence") or "").strip()
+            if evidence:
+                snippet = "".join(
+                    c if c >= " " or c in "\n\t" else " "
+                    for c in evidence[:500])
+                desc += ("\n\nRecorded scan-time response evidence "
+                         "(first 500 chars):\n" + snippet)
             steps.append({
                 "title": f"Step 3: Full Reproduction & Weaponization PoC ({poc_data['format'].upper()})",
-                "desc": poc_data["instructions"],
+                "desc": desc,
                 "code": poc_data["code"]
             })
 

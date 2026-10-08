@@ -10,6 +10,7 @@ import re
 import socket
 import ssl
 import time
+import uuid
 import zlib
 from dataclasses import dataclass
 from typing import Dict, List, Optional
@@ -17,6 +18,7 @@ from urllib.parse import urlencode, urljoin, urlparse
 
 import enum
 import httpx
+from core.audit import AuditLogger
 from core.policy import ScanPolicy
 
 try:
@@ -25,6 +27,27 @@ except ImportError:
     brotli = None
 
 _POLICY_DENY_WARNED: set = set()
+
+
+def _audit_body(data=None, json_body=None) -> Optional[str]:
+    """Normalize a request payload for the audit trail (curl-replay fidelity).
+
+    Mirrors what the transport will send: JSON dumps for json=, urlencoded for
+    dict data= (both httpx and the raw-socket path do this), utf-8 replace for
+    bytes. Returns None when there is no body so entries stay small.
+    """
+    if json_body is not None:
+        try:
+            return json.dumps(json_body, ensure_ascii=False)
+        except (TypeError, ValueError):
+            return str(json_body)
+    if data is None:
+        return None
+    if isinstance(data, bytes):
+        return data.decode("utf-8", "replace")
+    if isinstance(data, dict):
+        return urlencode(data)
+    return data if isinstance(data, str) else str(data)
 
 
 def _warn_policy_deny(reason: str) -> None:
@@ -452,8 +475,12 @@ def http_send(url: str, method: str = "GET", headers: dict = None,
         impersonate: Browser target for TLS spoofing ('chrome', 'safari', 'firefox')
                      None = use raw socket (default behavior)
     """
+    trace = uuid.uuid4().hex[:12]
     if policy:
-        decision = policy.authorize_request(url, method)
+        decision = policy.authorize_request(url, method,
+                                            headers=headers,
+                                            body=_audit_body(data),
+                                            trace_id=trace)
         if not decision.allowed:
             _warn_policy_deny(decision.reason)
             return {
@@ -527,6 +554,10 @@ def http_send(url: str, method: str = "GET", headers: dict = None,
                     body="",
                     waf=[],
                 )
+            AuditLogger.get_instance().log_response(
+                url, method, status_code=result.get("status") or 0,
+                elapsed=result.get("time") or 0.0, error=result.get("error"),
+                trace_id=trace)
             return result
     except ImportError:
         log_warn("curl_cffi not available, falling back to raw socket")
@@ -652,6 +683,10 @@ def http_send(url: str, method: str = "GET", headers: dict = None,
                 out["error"] = "rate_limited"
     except Exception as ex:
         out["error"] = str(ex)
+    AuditLogger.get_instance().log_response(
+        url, method, status_code=out.get("status") or 0,
+        elapsed=out.get("time") or 0.0, error=out.get("error"),
+        trace_id=trace)
     return out
 
 
@@ -960,8 +995,12 @@ class AsyncNetworkEngine:
         from core.proxy_manager import get_global_proxy_manager
         from core.ui import count_request
 
+        trace = uuid.uuid4().hex[:12]
         if self.policy:
-            decision = self.policy.authorize_request(url, method)
+            decision = self.policy.authorize_request(url, method,
+                                                     headers=headers,
+                                                     body=_audit_body(data, json),
+                                                     trace_id=trace)
             if not decision.allowed:
                 _warn_policy_deny(decision.reason)
                 return {
@@ -1071,6 +1110,10 @@ class AsyncNetworkEngine:
                     "waf": waf,
                 }
 
+            AuditLogger.get_instance().log_response(
+                url, method, status_code=response.get("status") or 0,
+                elapsed=response.get("time") or (time.time() - start_time),
+                error=response.get("error"), trace_id=trace)
             if self.policy and response.get("url") and not self.policy.allows_url(response["url"]):
                 return {
                     "status": 0,
@@ -1107,10 +1150,10 @@ class AsyncNetworkEngine:
                     from core.secret_scanner import SecretScanner
                     sec_findings = SecretScanner.scan_response(url, response["body"])
                     if sec_findings:
-                        from core.audit import AuditLogger
                         for sf in sec_findings:
                             AuditLogger.get_instance().log_finding(
-                                sf["title"], sf["severity"], sf["url"], sf["detail"]
+                                sf["title"], sf["severity"], sf["url"], sf["detail"],
+                                evidence=response["body"], trace_id=trace
                             )
                 except Exception:
                     pass
@@ -1124,6 +1167,10 @@ class AsyncNetworkEngine:
             if proxy_mgr:
                 proxy_mgr.record_request(error=True)
             status = 0
+            AuditLogger.get_instance().log_response(
+                url, method, status_code=0,
+                elapsed=time.time() - start_time, error=str(e),
+                trace_id=trace)
             return {"status": 0, "error": str(e), "time": time.time() - start_time,
                     "waf": [], "body": "", "headers": {}}
         finally:

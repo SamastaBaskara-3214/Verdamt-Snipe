@@ -386,12 +386,27 @@ async def phase_verify_report(target, findings, services, subs, scan_urls, targe
         spin = Spinner("Confirming vulnerabilities...")
         spin.start()
 
+        def _audit_confirmed(f):
+            """Persist confirmed finding + scan-time evidence to the audit trail."""
+            try:
+                from core.audit import AuditLogger
+                AuditLogger.get_instance().log_finding(
+                    f.get("title", ""),
+                    f.get("severity") or finding_cvss(f)["v"],
+                    f.get("url", ""),
+                    f.get("detail", ""),
+                    evidence=f.get("evidence", ""),
+                )
+            except Exception:
+                pass
+
         async def _verify(f):
             """Verify a single finding in thread pool or async."""
             try:
                 # POST-body re-verify (xxe_file) hanya di mode 4 (poisoning).
                 if await VulnVerifier.verify(f, async_engine, session_manager,
                                              allow_post=(mode == "poisoning")):
+                    _audit_confirmed(f)
                     return f
             except Exception as e:
                 w(f"verify error for {f.get('title','?')[:40]}: {str(e)[:60]}")
@@ -474,6 +489,10 @@ async def phase_verify_report(target, findings, services, subs, scan_urls, targe
             unique.append(f)
     unique.sort(key=lambda f: finding_cvss(f)["s"], reverse=True)
     dur = time.time() - t0
+    # Attach exact recorded requests (audit trail) so the report's PoC is a
+    # real replay instead of a generic template when the jsonl has the URL.
+    from core.audit import AuditLogger, inject_replay_curls
+    inject_replay_curls(unique, AuditLogger.get_instance().log_path)
     rep = ReportEngine(target, unique, services, subs, scan_urls, dur, target_wafs, VERSION, AUTHOR, mode)
     rep.save_html(); rep.save_pdf(); rep.print_summary()
     print(f"\n  {M}[ {chr(10086)} ]{N} {B}{W}SCAN COMPLETE: {target.upper()}{N}")

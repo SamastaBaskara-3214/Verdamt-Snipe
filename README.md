@@ -36,7 +36,7 @@
 - 🔒 **Secure Secret Management**: Mendukung `--bearer-file /tmp/token.txt` dan `--bearer env:MY_TOKEN` agar rahasia tidak bocor di `ps aux` atau `.bash_history`.
 - 🛡️ **Scope Guard & Policy Boundary (`ScanPolicy`)**: Otomatis mencegah request keluar dari domain target yang diizinkan.
 - 🧪 **Mode Simulasi (`--dry-run`)**: Menjalankan mutasi payload dan aturan kebijakan tanpa mengirimkan request aktif ke jaringan.
-- 📊 **Structured Audit Log (`--audit-log`)**: Merekam jejak audit `.jsonl` lengkap dengan status autorisasi, waktu respons, dan CVSS score.
+- 📊 **Structured Audit Log (`--audit-log`)**: Merekam jejak audit `.jsonl` lengkap dengan status autorisasi, headers/body request (replayable via `python3 -m core.audit <file> → curl`), hasil dispatch (status/latency), dan CVSS score.
 
 ---
 

@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 from threading import Lock
-from typing import Iterable, Optional
+from typing import Dict, Iterable, Optional
 from urllib.parse import urljoin, urlparse, urlunparse
 
 from core.scope import ScopeGuard
@@ -210,11 +210,17 @@ class ScanPolicy:
             return PolicyDecision(False, f"tool_not_allowed_in_passive_mode:{normalized}")
         return PolicyDecision(True)
 
-    def authorize_request(self, url: str, method: str = "GET") -> PolicyDecision:
+    def authorize_request(self, url: str, method: str = "GET",
+                          headers: Optional[Dict] = None,
+                          body: Optional[str] = None,
+                          trace_id: Optional[str] = None) -> PolicyDecision:
+        """Authorize an outgoing request; audit entry carries headers/body so
+        denied AND allowed requests stay curl-replayable from the .jsonl."""
         decision = self.check_url(url)
         if not decision.allowed:
             AuditLogger.get_instance().log_request(
-                url=url, method=method, allowed=False, reason=decision.reason, dry_run=self.dry_run
+                url=url, method=method, allowed=False, reason=decision.reason,
+                dry_run=self.dry_run, headers=headers, body=body, trace_id=trace_id
             )
             return decision
 
@@ -222,13 +228,15 @@ class ScanPolicy:
         if normalized_method not in SUPPORTED_METHODS:
             d = PolicyDecision(False, f"unsupported_method:{normalized_method}")
             AuditLogger.get_instance().log_request(
-                url=url, method=method, allowed=False, reason=d.reason, dry_run=self.dry_run
+                url=url, method=method, allowed=False, reason=d.reason,
+                dry_run=self.dry_run, headers=headers, body=body, trace_id=trace_id
             )
             return d
         if self.mode == "passive" and normalized_method not in PASSIVE_METHODS:
             d = PolicyDecision(False, f"method_not_allowed_in_passive_mode:{normalized_method}")
             AuditLogger.get_instance().log_request(
-                url=url, method=method, allowed=False, reason=d.reason, dry_run=self.dry_run
+                url=url, method=method, allowed=False, reason=d.reason,
+                dry_run=self.dry_run, headers=headers, body=body, trace_id=trace_id
             )
             return d
 
@@ -236,13 +244,15 @@ class ScanPolicy:
             if self.max_requests is not None and self._requests_sent >= self.max_requests:
                 d = PolicyDecision(False, "request_budget_exhausted")
                 AuditLogger.get_instance().log_request(
-                    url=url, method=method, allowed=False, reason=d.reason, dry_run=self.dry_run
+                    url=url, method=method, allowed=False, reason=d.reason,
+                    dry_run=self.dry_run, headers=headers, body=body, trace_id=trace_id
                 )
                 return d
             self._requests_sent += 1
 
         AuditLogger.get_instance().log_request(
-            url=url, method=method, allowed=True, reason="authorized", dry_run=self.dry_run
+            url=url, method=method, allowed=True, reason="authorized",
+            dry_run=self.dry_run, headers=headers, body=body, trace_id=trace_id
         )
         return PolicyDecision(True)
 
