@@ -168,7 +168,7 @@ async def run_app_analysis(target, seed_url, services, scan_urls, scope_guard, s
 | 6 | `APIProfiler(scan_urls).run()` | 72 | Endpoint classification, auth delta, GraphQL |
 | 7 | `AuthTester(services, session_manager).run()` | 74-82 | Auth bypass probes, rate limit testing |
 
-**BrowserRecon technical details (`modules/web/browser_recon.py`):**
+**BrowserRecon technical details (`modules/web/recon_crawlers/browser_recon.py`):**
 
 ```python
 async def run(self) -> Dict[str, Any]:
@@ -307,7 +307,7 @@ class ReportEngine:
         # outputs/<target>_report.pdf
 ```
 
-### 2.7 Mode 4: Poisoning (`runners/poison.py`, 1365 lines)
+### 2.7 Mode 4: Poisoning (`runners/poison/` package: state/wave/flood/orchestrator)
 
 Orkestrasi terpisah dari pipeline Phase 0-5 di atas:
 
@@ -338,7 +338,7 @@ class RateLimiter:
 
 **Lapisan lanjutan:**
 - `core/host_ratelimit.py::is_backing_off(host)` — backoff 429/403 menahan SEMUA generator (engine, ffuf, exhaust, smuggling), bukan cuma request async.
-- Mode 4 (`PoisonState` di `runners/poison.py`) — adaptive concurrency berbasis **latency request asli** (median 16 sample vs baseline): 2× → konfirmasi, 5× → `server_strained` + potong setengah; re-arm berjenjang (tick-2) biar gak osilasi.
+- Mode 4 (`PoisonState` di `runners/poison/state.py`) — adaptive concurrency berbasis **latency request asli** (median 16 sample vs baseline): 2× → konfirmasi, 5× → `server_strained` + potong setengah; re-arm berjenjang (tick-2) biar gak osilasi.
 
 ## 4. WAF Bypass System
 
