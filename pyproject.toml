@@ -4,12 +4,12 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "verdamt-snipe"
-version = "1.3.0"
+version = "1.4.5"
 description = "Async-first web security reconnaissance framework for authorized assessments."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { file = "LICENSE" }
-authors = [{ name = "Verdammt" }]
+authors = [{ name = "Samasta Baskara (Verdammt)" }]
 keywords = ["security", "reconnaissance", "pentesting", "bug-bounty"]
 classifiers = [
   "Development Status :: 3 - Alpha",

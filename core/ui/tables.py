@@ -54,7 +54,7 @@ class ScanDashboard:
         self._lock = threading.Lock()
         self.target: str = ""
         self.mode: str = ""
-        self.version: str = "v1.3.0 - NEXUS"
+        self.version: str = "v1.4.5 - NEXUS"
         self.phase: str = ""
         self.status: str = "STARTING"
         self.current_activity: str = ""

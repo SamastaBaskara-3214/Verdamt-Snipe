@@ -33,7 +33,7 @@ from core.camouflage import CamouflageBrowser
 from core.path_obfuscator import PathObfuscator
 from core.proxy_manager import setup_proxy, get_global_proxy_manager
 
-VERSION = "1.3.0 - NEXUS"
+VERSION = "1.4.5 - NEXUS"
 AUTHOR = "Verdammt"
 VULN_THREADS = 25
 
