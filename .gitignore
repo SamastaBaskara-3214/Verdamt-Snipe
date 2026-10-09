@@ -32,3 +32,9 @@ patch_ui.py
 
 # go build artifacts (engine rebuilt locally / by go_bridge)
 go/build/
+
+# scan/audit result artifacts — never track
+audit_*.jsonl
+*.state
+*_report.html
+*_report.pdf
