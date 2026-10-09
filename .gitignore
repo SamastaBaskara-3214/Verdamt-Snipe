@@ -29,3 +29,6 @@ dump/
 codebase-analysis/
 # one-off local patch script
 patch_ui.py
+
+# go build artifacts (engine rebuilt locally / by go_bridge)
+go/build/
