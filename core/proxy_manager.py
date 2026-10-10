@@ -364,6 +364,29 @@ def resolve_proxy(proxy: str = None) -> Optional[str]:
     return os.environ.get("VERDAMT_PROXY") or None
 
 
+def _normalize_local_target(host: str, scheme: str) -> str:
+    """Plain socks5/socks4 resolve locally — force a deterministic IPv4.
+
+    PySocks itself resolves with AF_UNSPEC and takes whatever getaddrinfo
+    returns first, which is ::1 on IPv6-first hosts (CI runners) while the
+    service listens on 127.0.0.1 → the proxy dials ::1 and answers
+    0x05 Connection refused. localhost is pinned to 127.0.0.1 and every
+    other name is resolved to its A record here instead.
+    """
+    if scheme not in ("socks5", "socks4"):
+        return host
+    if host.lower() == "localhost":
+        return "127.0.0.1"
+    try:
+        infos = socket.getaddrinfo(host, None, socket.AF_INET, socket.SOCK_STREAM)
+    except OSError:
+        return host          # AAAA-only target → let the proxy resolve it
+    for family, _, _, _, sockaddr in infos:
+        if family == socket.AF_INET and isinstance(sockaddr[0], str):
+            return sockaddr[0]
+    return host
+
+
 def _blocking_proxied_socket(proxy_url: str, host: str, port: int,
                              timeout: float):
     """Connect to (host, port) through a SOCKS4/5 or HTTP proxy.
@@ -404,7 +427,7 @@ def _blocking_proxied_socket(proxy_url: str, host: str, port: int,
         password=password,
     )
     sock.settimeout(timeout)
-    sock.connect((host, port))
+    sock.connect((_normalize_local_target(host, scheme), port))
     sock.settimeout(None)
     sock.setblocking(False)
     return sock
