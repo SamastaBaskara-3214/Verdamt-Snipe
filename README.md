@@ -1,8 +1,8 @@
-<h1 align="center">🎯 Verdamt-Snipe v1.3.0 NEXUS</h1>
+<h1 align="center">🎯 Verdamt-Snipe v1.4.5 NEXUS</h1>
 <h4 align="center">Framework Keamanan Web Async-First, TLS Impersonation, Playwright Automation Engine & Vulnerability Assault</h4>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Python-3.10%2B-blue.svg">
+  <img src="https://img.shields.io/badge/Python-3.12%2B-blue.svg">
   <img src="https://img.shields.io/badge/Playwright-10--Module%20Suite-green.svg">
   <img src="https://img.shields.io/badge/TLS%20Spoofing-curl__cffi-purple.svg">
   <img src="https://img.shields.io/badge/UI-Tactical%20Rich%20TUI-gold.svg">
