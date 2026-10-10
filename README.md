@@ -183,4 +183,4 @@ python3 -m unittest discover tests
 > **Verdamt-Snipe adalah framework pengujian keamanan berorientasi profesional.**
 > Gunakan tool ini **HANYA** pada sistem yang Anda miliki atau yang telah memberikan izin resmi (Bug Bounty Program / Penetration Testing Agreement). Selalu patuhi batas cakupan (scope) dan hukum yang berlaku.
 
-<p align="center"><i>"Silent · Precise · Relentless."</i> — <b>Verdammt</b></p>
+<p align="center"><i>"Silent · Precise · Relentless."</i> — <b>Samasta Baskara</b></p>
